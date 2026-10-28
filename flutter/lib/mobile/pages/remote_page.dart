@@ -23,6 +23,7 @@ import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../models/shortcut_model.dart';
 import '../../utils/image.dart';
+import '../soft_keyboard_diff.dart';
 import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
 
@@ -373,21 +374,24 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     if (oldValue.isNotEmpty &&
         newValue.isNotEmpty &&
         oldValue[0] == '1' &&
-        newValue[0] != '1') {
+        newValue[0] != '1' &&
+        // Typed with the caret at the start, not a paste replacing the field.
+        !newValue.endsWith(oldValue)) {
       // clipboard
       oldValue = '';
     }
-    // This length-only diff assumes the IME appends at the end. If an IME
-    // leaves the caret inside paired punctuation, later insertions can replay
-    // the closing symbol: "()" -> "(a)" sends ")" instead of "a". This is a
-    // client text-diff issue, independent of the host keyboard layout.
     if (newValue.length == oldValue.length) {
       // ?
     } else if (newValue.length < oldValue.length) {
       final char = 'VK_BACK';
       inputModel.inputKey(char);
     } else {
-      final content = newValue.substring(oldValue.length);
+      // The IME caret is not always at the end (cursor-moving gestures, a
+      // caret left inside paired punctuation), so diff by position, not length.
+      final (deleted, content) = softKeyboardDiff(oldValue, newValue);
+      for (var i = 0; i < deleted; ++i) {
+        inputModel.inputKey('VK_BACK');
+      }
       if (content.length > 1) {
         if (oldValue != '' &&
             content.length == 2 &&
