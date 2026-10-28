@@ -15,6 +15,14 @@ void main() {
     expect(softKeyboardDiff('$padding()', '$padding(a)'), (0, 'a'));
   });
 
+  test('a Korean syllable gaining a final consonant replaces the syllable', () {
+    expect(softKeyboardDiff('$padding하', '$padding한'), (1, '한'));
+  });
+
+  test('backspace merging two syllables resends the merged syllable', () {
+    expect(softKeyboardDiff('$padding하나', '$padding한'), (2, '한'));
+  });
+
   test('text replaced by the IME deletes the changed part and resends it', () {
     expect(softKeyboardDiff('${padding}teh', '${padding}the '), (2, 'he '));
   });

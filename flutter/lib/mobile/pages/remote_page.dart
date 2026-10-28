@@ -380,18 +380,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       // clipboard
       oldValue = '';
     }
-    if (newValue.length == oldValue.length) {
-      // ?
-    } else if (newValue.length < oldValue.length) {
-      final char = 'VK_BACK';
-      inputModel.inputKey(char);
+    // Diff by position, not length: the IME caret is not always at the end
+    // (cursor-moving gestures, a caret left inside paired punctuation), and a
+    // composing IME such as Korean replaces the syllable in place.
+    final (deleted, content) = softKeyboardDiff(oldValue, newValue);
+    for (var i = 0; i < deleted; ++i) {
+      inputModel.inputKey('VK_BACK');
+    }
+    if (content.isEmpty) {
+      // Deletion only.
     } else {
-      // The IME caret is not always at the end (cursor-moving gestures, a
-      // caret left inside paired punctuation), so diff by position, not length.
-      final (deleted, content) = softKeyboardDiff(oldValue, newValue);
-      for (var i = 0; i < deleted; ++i) {
-        inputModel.inputKey('VK_BACK');
-      }
       if (content.length > 1) {
         if (oldValue != '' &&
             content.length == 2 &&
