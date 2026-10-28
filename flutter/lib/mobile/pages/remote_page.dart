@@ -91,6 +91,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   bool _showBar = !isWebDesktop;
   bool _showGestureHelp = false;
   String _value = '';
+  Future<void> _softKeyboardSends = Future.value();
   Orientation? _currentOrientation;
   final _uniqueKey = UniqueKey();
   Timer? _iosKeyboardWorkaroundTimer;
@@ -385,7 +386,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     // composing IME such as Korean replaces the syllable in place.
     final (deleted, content) = softKeyboardDiff(oldValue, newValue);
     for (var i = 0; i < deleted; ++i) {
-      inputModel.inputKey('VK_BACK');
+      _sendInOrder(() => inputModel.inputKey('VK_BACK'));
     }
     if (content.isEmpty) {
       // Deletion only.
@@ -403,13 +404,15 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
                 content == '（）' ||
                 content == '【】')) {
           // can not only input content[0], because when input ], [ are also auo insert, which cause ] never be input
-          bind.sessionInputString(sessionId: sessionId, value: content);
+          _sendInOrder(() =>
+              bind.sessionInputString(sessionId: sessionId, value: content));
           _openKeyboardUnlocked();
           return;
         }
-        bind.sessionInputString(sessionId: sessionId, value: content);
+        _sendInOrder(() =>
+            bind.sessionInputString(sessionId: sessionId, value: content));
       } else {
-        inputChar(content);
+        _sendInOrder(() => inputChar(content));
       }
     }
   }
@@ -426,7 +429,16 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
 
-  void inputChar(String char) {
+  // bind calls without SyncReturn run on Rust worker threads, so a burst of
+  // them can reach the peer out of order: "VK_BACK, VK_BACK, 건" typed as
+  // "VK_BACK, 건, VK_BACK". Start each one after the previous has returned.
+  void _sendInOrder(Future<void> Function() send) {
+    _softKeyboardSends = _softKeyboardSends
+        .then((_) => send())
+        .catchError((e) => debugPrint('soft keyboard input failed: $e'));
+  }
+
+  Future<void> inputChar(String char) async {
     if (!inputModel.keyboardInputAllowed) {
       return;
     }
@@ -435,7 +447,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     } else if (char == ' ') {
       char = 'VK_SPACE';
     }
-    inputModel.inputKey(char);
+    await inputModel.inputKey(char);
   }
 
   void openKeyboard() {
